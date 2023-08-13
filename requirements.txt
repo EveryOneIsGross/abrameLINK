@@ -1,0 +1,8 @@
+gpt4all==🤷‍♀️
+Embed4All==🤷‍♀️
+textblob==0.15.3
+rake-nltk==1.0.4
+numpy==1.21.0
+json5==0.9.5
+pickle5==0.0.11
+os-sys==2.1.1
