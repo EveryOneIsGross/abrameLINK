@@ -2,7 +2,7 @@
 
 ![abramelin](https://github.com/EveryOneIsGross/abrameLINK/assets/23621140/a9c6027f-6e1b-424e-a590-38cda6899c7e)
 
-## A sequence of reasoning agents that will engage in a round table conversation based on teh user query and their stated available resources. 
+A sequence of reasoning agents that will engage in a round table conversation based on teh user query and their stated available resources
 
 ---
 
@@ -11,7 +11,7 @@ abrameLINK is a roundtable chat agent. By simulating a roundtable discussion amo
 The name abrameLINK is derived from the Book of Abramelin, fabled to be able to summon a legion of demons. The script is well designed for business advice, so it's totally appropriate. 😈 It also has persisten embeddings and ability to recall for relevent context.
 
 ## How to Use
----
+
 
   **Setup:** Ensure all dependencies from requirements.txt are installed.
   **Run the Script:** Execute the script. You will be prompted to:
@@ -20,7 +20,7 @@ The name abrameLINK is derived from the Book of Abramelin, fabled to be able to 
   **Select reasoning paradigms:** Use the letters associated with each paradigm to define a sequence (e.g., 'aabc').
 
 ## Available Reasoning Paradigms
----
+
 
 a. Second-Order Thinking
 
