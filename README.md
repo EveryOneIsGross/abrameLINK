@@ -8,12 +8,10 @@ A reasoning sequence of agents that will engage in a round table conversation ba
 
 abrameLINK is a roundtable chat agent. By simulating a roundtable discussion among multiple agents, each representing a unique reasoning framework, it ensures comprehensive analysis of the user's query. As each agent in the sequence processes the query, the following agent builds upon the previous agent's response, allowing for a multi-dimensional examination of the query. The user can enter a list of their available resources to help agents suggest actionable responses.
 
-The name abrameLINK is derived from the Book of Abramelin, fabled to be able to summon a legion of demons. The script is designed mostly for business advice, so it's totally appropriate.
-
-It also has persisten embeddings and ability to recall for relevent context.
----
+The name abrameLINK is derived from the Book of Abramelin, fabled to be able to summon a legion of demons. The script is designed mostly for business advice, so it's totally appropriate. It also has persisten embeddings and ability to recall for relevent context. 😈
 
 ## How to Use
+---
 
   **Setup:** Ensure all dependencies from requirements.txt are installed.
   **Run the Script:** Execute the script. You will be prompted to:
@@ -22,6 +20,7 @@ It also has persisten embeddings and ability to recall for relevent context.
   **Select reasoning paradigms:** Use the letters associated with each paradigm to define a sequence (e.g., 'aabc').
 
 ## Available Reasoning Paradigms
+---
 
 1. Second-Order Thinking
 How to Use: Helps you think of immediate consequences and what comes next.
