@@ -2,7 +2,7 @@
 
 ![abramelin](https://github.com/EveryOneIsGross/abrameLINK/assets/23621140/a9c6027f-6e1b-424e-a590-38cda6899c7e)
 
-##A reasoning sequence of agents that will engage in a round table conversation based on teh user query and their stated available resources. 
+## A sequence of reasoning agents that will engage in a round table conversation based on teh user query and their stated available resources. 
 
 ---
 
