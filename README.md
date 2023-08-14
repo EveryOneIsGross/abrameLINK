@@ -145,4 +145,5 @@ How to Use: Reflect on whether you're viewing challenges from a mindset of limit
 Method: Encourages a perspective shift. A scarcity mindset sees limitations, while an abundance mindset sees opportunities.
 
  * This original list of 20 was posted by someone or a sponsored ad on twitter, couldn't find in my feed again.
+
 Shout out to Top 20 Reasoning Prompts for ChatGPT 💁‍♂️
