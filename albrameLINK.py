@@ -7,7 +7,7 @@ import json
 import os
 
 # Global Configuration
-MODEL_NAME = 'C://AI_MODELS//vicuna-7b-cot-superhot-8k.ggmlv3.q2_K.bin'
+MODEL_NAME = 'C://AI_MODELS//openorca-platypus2-13b.ggmlv3.q4_1.bin'
 GUIDANCE_PROMPT = ("As a reasoning framework answer: {user_query}. "
                    "List only a. problem b. solution c. action, consider current context, "
                    "use solutions and methods according to suggested logic.")
@@ -24,16 +24,16 @@ tokens = " ".join(conversation_history).split()
 output = ""
 reasoning_used = []
 
-def format_response(framework_data):
+def format_response(agent_data):
     template = f"""
-    Agent Name: {framework_data['name']}
-    Reasoning Framework: {framework_data['prompt']}
+    Agent Name: {agent_data['name']}
+    Reasoning Framework: {agent_data['prompt']}
     --------------------------------------------
     Response: 
-    {framework_data['response']}
+    {agent_data['response']}
     
-    Sentiment: {framework_data['sentiment']}
-    Keywords: {', '.join(framework_data['keywords'])}
+    Sentiment: {agent_data['sentiment']}
+    Keywords: {', '.join(agent_data['keywords'])}
     --------------------------------------------
     """
     return template
@@ -44,22 +44,45 @@ else:
     output += " ".join(tokens)
 # Utility Functions
 
-def save_framework_data(data, filename="output_data.json"):
-    if os.path.exists(filename):
+def save_to_json(data, filename, mode="append"):
+    """
+    Save data to a JSON file.
+
+    :param data: Data to save
+    :param filename: Name of the file
+    :param mode: Mode of saving - "append" or "overwrite"
+    """
+    existing_data = []
+    
+    if os.path.exists(filename) and mode == "append":
         with open(filename, "r") as json_file:
-            existing_data = json.load(json_file)
+            try:
+                existing_data = json.load(json_file)
+                if not isinstance(existing_data, list):
+                    # Convert to list if the existing data is not a list
+                    existing_data = [existing_data]
+            except json.JSONDecodeError:
+                # Handle corrupted JSON file or any other reading error
+                existing_data = []
+    
+    if mode == "append":
         existing_data.append(data)
         final_data = existing_data
     else:
-        final_data = [data]
+        final_data = data
+
     with open(filename, "w") as json_file:
         json.dump(final_data, json_file, indent=4)
 
 
 def save_summary_data(summary, user_query, reasoning_used=None, filename="summary_data.json"):
+    # Extract keywords from the summary
     summary_keywords = extract_keywords(summary)
+    
+    # Perform sentiment analysis on the summary
     summary_sentiment = analyze_sentiment(summary)
     
+    # Construct the summary data
     summary_data = {
         "Summary Agent Response": {
             "Initial Question": user_query,
@@ -71,27 +94,9 @@ def save_summary_data(summary, user_query, reasoning_used=None, filename="summar
             "Reasoning Frameworks Used": reasoning_used if reasoning_used else "Unknown",
         }
     }
-
-    existing_data = []
     
-    # Check if the file already exists and read its contents
-    if os.path.exists(filename):
-        with open(filename, "r") as json_file:
-            try:
-                existing_data = json.load(json_file)
-                if not isinstance(existing_data, list):
-                    # Convert to list if the existing data is not a list
-                    existing_data = [existing_data]
-            except json.JSONDecodeError:
-                # Handle corrupted JSON file or any other reading error
-                existing_data = []
-    
-    # Append new summary data
-    existing_data.append(summary_data)
-
-    # Save the updated data
-    with open(filename, "w") as json_file:
-        json.dump(existing_data, json_file, indent=4)
+    # Save the constructed data to the specified JSON file
+    save_to_json(summary_data, filename)
 
 def save_data(filename, data):
     with open(filename, 'wb') as file:
@@ -127,9 +132,6 @@ def extract_keywords(text, limit=KEYWORD_LIMIT):
 def generate_embedding(text):
     embedder = Embed4All()
     return embedder.embed(text)
-
-
-
 
 # Memory Management
 
@@ -181,30 +183,22 @@ class ChatAgent:
 
         # 1. User's Initial Question:
         summary['Initial Question'] = initial_question
-
         # 1.5. Agent Responses:
         summary['Agent Responses'] = agent_responses
-
         # 2. Sentiment Analysis:
         summary['Sentiment Analysis'] = sentiment_analysis
-
         # 3. Main Themes or Topics:
         summary['Main Themes or Topics'] = main_themes
-
         # 4. Reasoning Frameworks Used:
         summary['Reasoning Frameworks Used'] = reasoning_frameworks
-
         # 5. Overall Sentiment:
         summary['Overall Sentiment'] = sentiment_analysis
-
         # 6. Complete Agent Responses:
         complete_agent_responses = "\n\n".join([f"Agent {item['name']}:\n{item['response']}" for item in self.response_history if 'response' in item])
         summary['Complete Agent Responses'] = complete_agent_responses
-
         # 7. Detailed Sentiment Analysis for Each Agent:
         detailed_sentiments = [{"Agent": item['name'], "Sentiment": analyze_sentiment(item['response'])} for item in self.response_history if 'response' in item]
         summary['Detailed Sentiment Analysis'] = detailed_sentiments
-
         summarized_response = ""
         for key, value in summary.items():
             summarized_response += f"{key}: {value}\n\n"
@@ -222,10 +216,8 @@ class ChatAgent:
         with self.model.chat_session():
             # Generate the summary using GPT-4All
             generated_summary = self.model.generate(prompt=formattedsumprompt, temp=0.2, top_p=TOP_P, top_k=TOP_K, max_tokens=1000)
-
         # Combine the generated summary with the existing summary components
         summarized_response = f"{generated_summary}\n\n"
-
         return summarized_response
 
     
@@ -313,98 +305,90 @@ def print_availableframes():
         letter = chr(i + ord('a'))
         print(f"{letter}. {name}")
 
-framework_data = {
+recorded_data = {
     "user_input": None,
     "available_resources": None,
     "agents": []
 }
-def save_data_to_json(data, filename):
-    existing_data = []
-    
-    # Check if the file already exists and read its contents
-    if os.path.exists(filename):
-        with open(filename, "r") as json_file:
-            try:
-                existing_data = json.load(json_file)
-                if not isinstance(existing_data, list):
-                    # Convert to list if the existing data is not a list
-                    existing_data = [existing_data]
-            except json.JSONDecodeError:
-                # Handle corrupted JSON file or any other reading error
-                existing_data = []
-    
-    # Append new data
-    existing_data.append(data)
-
-    # Save the updated data
+def save_summary_to_json(conversation_summaries, filename="conversation_summaries.json"):
     with open(filename, "w") as json_file:
-        json.dump(existing_data, json_file, indent=4)
+        json.dump(conversation_summaries, json_file, indent=4)
 
 def main():
-    global framework_data
+    global recorded_data
     agent = ChatAgent()
-
-    user_input = input("Enter your query: ")
-    framework_data["user_input"] = user_input
-
-    # Prompt the user for their available resources
-    available_resources = input("Please specify your available resources: ")
-    framework_data["available_resources"] = available_resources
-    print_availableframes()
-    sequence = input("Enter the sequence of agents (e.g., 'aabc'): ")
-
-    # Update the process_input function call to pass the available resources
-    responses = agent.process_input(user_input, sequence, available_resources)
-
-    # List to store conversation summaries
-    conversation_summaries = []
-
-    # Loop through the responses to record and print them
-    for i, response in enumerate(responses, 1):
-        framework_data = {
-            "name": sequence[i-1].upper(),
-            "prompt": prompts[ord(sequence[i-1]) - ord('a')][0],
-            "response": response,
-            "sentiment": analyze_sentiment(response),
-            "keywords": extract_keywords(response)
-        }
-        framework_data["agents"].append(framework_data)
-        print(format_response(framework_data))
-
-    # Calculate overall sentiment for the conversation
-    overall_sentiment = "Positive" if sum(framework_data["sentiment"] for framework_data in framework_data["agents"]) > 0 else "Negative" if sum(framework_data["sentiment"] for framework_data in framework_data["agents"]) < 0 else "Neutral"
-
-    # Extract main themes from the agents' responses
-    main_themes = []
-    for framework_data in framework_data["agents"]:
-        main_themes.extend(framework_data["keywords"])
-    main_themes = list(set(main_themes))  # Remove duplicates
-
-    # Extract reasoning frameworks used from the agents' prompts
-    reasoning_frameworks = [framework_data["prompt"] for framework_data in framework_data["agents"]]
-
-    # Generate and print the summary
-    summarized_response = agent.generate_summary(
-        framework_data["user_input"],
-        [framework_data["response"] for framework_data in framework_data["agents"]],
-        overall_sentiment,
-        main_themes,
-        reasoning_frameworks
-    )
-    print("\n\n--------------------------------")
-    print("Summary of the Conversation:")
-    print("--------------------------------")
-    print(summarized_response)
     
-    # Append the summarized response to the list
-    conversation_summaries.append(summarized_response)
+    while True:  # Start the conversation loop
+        user_input = input("\nEnter your query (or type 'exit' to end): ")
+        if user_input.strip().lower() == 'exit':
+            break  # End the loop if the user types 'exit'
+        
+        recorded_data["user_input"] = user_input
 
-    # Save the conversation summaries to the summary_data.json file
-    save_data_to_json(conversation_summaries, 'summary_data.json')
+        # Prompt the user for their available resources
+        available_resources = input("Please specify your available resources: ")
+        recorded_data["available_resources"] = available_resources
+        print_availableframes()
+        sequence = input("Enter the sequence of agents (e.g., 'aabc'): ")
 
-    # Save the recorded data and summary
-    save_data_to_json(framework_data, 'framework_data.json')
-    save_summary_data(summarized_response, framework_data["user_input"], reasoning_used=reasoning_used, filename='summary_data.json')
+        # Update the process_input function call to pass the available resources
+        responses = agent.process_input(user_input, sequence, available_resources)
+        
+        # List to store conversation summaries
+        conversation_summaries = []
 
+        # Loop through the responses to record and print them
+        for i, response in enumerate(responses, 1):
+            agent_data = {
+                "name": sequence[i-1].upper(),
+                "prompt": prompts[ord(sequence[i-1]) - ord('a')][0],
+                "response": response,
+                "sentiment": analyze_sentiment(response),
+                "keywords": extract_keywords(response)
+            }
+            recorded_data["agents"].append(agent_data)
+            print(format_response(agent_data))
+
+        # Calculate overall sentiment for the conversation
+        overall_sentiment = "Positive" if sum(agent_data["sentiment"] for agent_data in recorded_data["agents"]) > 0 else "Negative" if sum(agent_data["sentiment"] for agent_data in recorded_data["agents"]) < 0 else "Neutral"
+
+        # Extract main themes from the agents' responses
+        main_themes = []
+        for agent_data in recorded_data["agents"]:
+            main_themes.extend(agent_data["keywords"])
+        main_themes = list(set(main_themes))  # Remove duplicates
+
+        # Extract reasoning frameworks used from the agents' prompts
+        reasoning_frameworks = [agent_data["prompt"] for agent_data in recorded_data["agents"]]
+
+        # Generate and print the summary
+        summarized_response = agent.generate_summary(
+            recorded_data["user_input"],
+            [agent_data["response"] for agent_data in recorded_data["agents"]],
+            overall_sentiment,
+            main_themes,
+            reasoning_frameworks
+        )
+        print("\n\n--------------------------------")
+        print("Summary of the Conversation:")
+        print("--------------------------------")
+        print(summarized_response)
+
+        # Append the summarized response to the list
+        conversation_summaries.append(summarized_response)
+
+        # Save the conversation summaries to a JSON file
+        save_to_json(conversation_summaries, "conversation_summaries.json")
+
+        # Save the recorded data and summary
+        save_to_json(recorded_data, "output_data.json")
+        save_summary_data(summarized_response, recorded_data["user_input"], reasoning_used=reasoning_used)
+
+        # Clear recorded_data for next iteration
+        recorded_data = {
+            "user_input": None,
+            "available_resources": None,
+            "agents": []
+        }
 if __name__ == "__main__":
     main()
