@@ -9,9 +9,8 @@ import os
 # Global Configuration
 MODEL_NAME = 'C://AI_MODELS//orca-mini-3b.ggmlv3.q4_0.bin'
 GUIDANCE_PROMPT = ("As a reasoning expert answer: {user_query}. "
-                   "Assume you have all available information you need."
-                   "Use solutions and methods according to suggested reasoning model."
-                   "List only a. problem b. solution c. action.")
+                   "Assume you have all available information you need, challenge contradictions."
+                   "Suggest a. problem:\n b. solution:\n c. action:\n")
 TEMP = 0.5 # TEMP is the temperature of the sampling. It ranges from 0 to 1.0
 TOP_P = 0.5 # TOP_P is the cumulative probability of the most likely tokens to sample from it ranges from 0 to 1.0
 TOP_K = 128 # TOP_K is the number of the most likely  tokens to sample from it ranges from 0 to infinity
@@ -204,17 +203,19 @@ class ChatAgent:
         summary['Detailed Sentiment Analysis'] = detailed_sentiments
         
         # Prompt structure with emphasis on conversation history
-        formattedsumprompt = (f"Given the previous conversation history:\n{''.join(global_conversation_history)}\n\n"
-                            f"Generate a comprehensive summary considering the following details:\n\n"
-                            f"Initial Question: {initial_question}\n\n"
+        formattedsumprompt = (f"Previously in conversation:\n{''.join(global_conversation_history)}\n\n"
+                            f"Summarise the following:\n\n"
                             f"Agent Responses:\n{agent_responses}\n\n"
                             f"Sentiment Analysis:\n{sentiment_analysis}\n\n"
                             f"Main Themes or Topics:\n{main_themes}\n\n"
                             f"Reasoning Frameworks Used:\n{reasoning_frameworks}\n\n"
                             f"Overall Sentiment:\n{sentiment_analysis}\n\n"
-                            f"Complete Agent Responses:\n{complete_agent_responses}\n\n"
-                            f"Detailed Sentiment Analysis for Each Agent:\n{detailed_sentiments}\n\n")
-
+                            #f"Complete Agent Responses:\n{complete_agent_responses}\n\n"
+                            f"Detailed Sentiment Analysis for Each Agent:\n{detailed_sentiments}\n\n"
+                            f"Initial Question: {initial_question}\n\n"
+                            "Do not reply with a question or write a list.\n\n\n"
+                            "Summary: \n")
+        #print(formattedsumprompt)
         # Generate the summary using GPT-4All
         with self.model.chat_session():
             generated_summary = self.model.generate(prompt=formattedsumprompt, temp=1, top_p=TOP_P, top_k=TOP_K)
