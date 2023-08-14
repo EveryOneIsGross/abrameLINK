@@ -13,8 +13,8 @@ GUIDANCE_PROMPT = ("As a reasoning expert answer: {user_query}. "
                    "Suggest a. problem:\n b. solution:\n c. action:\n")
 TEMP = 0.5 # TEMP is the temperature of the sampling. It ranges from 0 to 1.0
 TOP_P = 0.5 # TOP_P is the cumulative probability of the most likely tokens to sample from it ranges from 0 to 1.0
-TOP_K = 128 # TOP_K is the number of the most likely  tokens to sample from it ranges from 0 to infinity
-CHUNK_LIMIT = 64
+TOP_K = 64 # TOP_K is the number of the most likely  tokens to sample from it ranges from 0 to infinity
+CHUNK_LIMIT = 512
 KEYWORD_LIMIT = 4
 
 # Rename the global variable
