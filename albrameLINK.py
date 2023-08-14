@@ -7,23 +7,54 @@ import json
 import os
 
 # Global Configuration
-MODEL_NAME = 'C://AI_MODELS//orca-mini-3b.ggmlv3.q4_0.bin'
-GUIDANCE_PROMPT = ("As a reasoning expert answer: {user_query}. "
-                   "Assume you have all available information you need, challenge contradictions."
-                   "Suggest a. problem:\n b. solution:\n c. action:\n")
+MODEL_NAME = 'C://AI_MODELS//openorca-platypus2-13b.ggmlv3.q4_1.bin'
+GUIDANCE_PROMPT = ("Respond with a reasoned idea, solution, and action. Assume all necessary information has been provided.")
 TEMP = 0.5 # TEMP is the temperature of the sampling. It ranges from 0 to 1.0
 TOP_P = 0.5 # TOP_P is the cumulative probability of the most likely tokens to sample from it ranges from 0 to 1.0
 TOP_K = 64 # TOP_K is the number of the most likely  tokens to sample from it ranges from 0 to infinity
 CHUNK_LIMIT = 512
-KEYWORD_LIMIT = 4
+KEYWORD_LIMIT = 6
 
-# Rename the global variable
+# Global Variables
 global_conversation_history = []
 max_tokens_for_context = 1024
 tokens = " ".join(global_conversation_history).split()
 output = ""
 reasoning_used = []
 conversation_summaries = []
+
+# Define the frameworks and their associated logic
+prompts = [
+    ("Second-Order Thinking", "Given {available_resources}, first identify the immediate outcomes of {user_query}. Then, dive deeper to discern the secondary, less obvious consequences.", "medium"),
+    ("Pareto Principle (80/20 Rule)", "Employing {available_resources}, concentrate on the crucial '20%' of factors that will yield '80%' of the outcomes for {user_query}.", "short"),
+    ("First Principle Thinking", "Utilizing {available_resources}, break down {user_query} to its foundational principles. Discern between what's factual and what's assumed.", "medium"),
+    ("Regret Minimization Framework", "With {available_resources} in mind, project long-term implications of {user_query}, especially focusing on potential regrets and emotional repercussions.", "medium"),
+    ("Opportunity Costs", "Given {available_resources}, contemplate the alternatives you'll forego by opting for {user_query}.", "medium"),
+    ("The Sunk Cost Fallacy", "Utilizing {available_resources}, analyze {user_query} by emphasizing its prospective benefits over the costs already incurred.", "medium"),
+    ("Occam's Razor", "With {available_resources}, distill {user_query} to its simplest form or explanation, eliminating unnecessary complexities.", "short"),
+    ("Systems Thinking", "Using {available_resources}, map out where {user_query} slots into broader systems or networks.", "short"),
+    ("Inversion", "Keeping {available_resources} in mind, reverse-engineer {user_query}, highlighting potential challenges and pitfalls.", "medium"),
+    ("Leverage", "Employing {available_resources}, explore how you can use leverage to maximize the outcomes of {user_query}.", "short"),
+    ("Circle of Competence", "Given {available_resources}, verify that {user_query} aligns well with your domain of expertise and knowledge.", "medium"),
+    ("Law of Diminishing Returns", "With {available_resources}, pinpoint areas in {user_query} where additional efforts might produce diminishing outcomes.", "medium"),
+    ("Niches", "Using {available_resources}, categorize how {user_query} can be tailored or adapted to cater to specific niches or subgroups.", "short"),
+    ("Margin of Safety", "With {available_resources}, strategize to incorporate a buffer or safety net around the outcomes of {user_query}.", "medium"),
+    ("Hanlon's Razor", "Given {available_resources}, approach {user_query} with neutrality, avoiding assumptions of malevolence or negative intent.", "short"),
+    ("Randomness", "Considering {available_resources}, factor in random elements of unpredictability and chance that could influence {user_query}.", "medium"),
+    ("Critical Mass", "Utilizing {available_resources}, determine the tipping point at which {user_query} becomes self-sustaining or gains momentum.", "short"),
+    ("The Halo Effect", "Employing {available_resources}, scrutinize how initial perceptions or biases might color subsequent interpretations of {user_query}.", "medium"),
+    ("Feedback Loops", "With {available_resources}, trace the cyclic patterns or recurring themes that emerge in relation to {user_query}.", "medium"),
+    ("Scarcity and Abundance Mindset", "Given {available_resources}, introspect on the mindset—either scarcity-driven or abundance-oriented—that dominates when addressing {user_query}.", "long")
+]
+
+# Token limits based on complexity
+token_limits = {
+    "short": 128,
+    "medium": 256,
+    "long": 512
+}
+
+# Utility Functions
 
 def format_response(agent_data):
     template = f"""
@@ -43,12 +74,10 @@ if len(tokens) > max_tokens_for_context:
     output += " ".join(tokens[-max_tokens_for_context:])
 else:
     output += " ".join(tokens)
-# Utility Functions
 
 def save_to_json(data, filename, mode="append"):
-
     existing_data = []
-    
+  
     if os.path.exists(filename) and mode == "append":
         with open(filename, "r") as json_file:
             try:
@@ -59,31 +88,24 @@ def save_to_json(data, filename, mode="append"):
             except json.JSONDecodeError:
                 # Handle corrupted JSON file or any other reading error
                 existing_data = []
-    
+ 
     if mode == "append":
         existing_data.append(data)
         final_data = existing_data
     else:
         final_data = data
-
     with open(filename, "w") as json_file:
         json.dump(final_data, json_file, indent=4)
 
 
 def save_summary_data(summary, user_query, reasoning_used=None, filename="summary_data.json"):
-    # Extract keywords from the summary
     summary_keywords = extract_keywords(summary)
-    
-    # Perform sentiment analysis on the summary
     summary_sentiment = analyze_sentiment(summary)
-    
-    # Construct the summary data
     summary_data = {
         "Summary Agent Response": {
             "Initial Question": user_query,
             "Sentiment Analysis": {
                 "Overall Sentiment": summary_sentiment,
-                # Add more detailed breakdown here if available from sentiment analysis function
             },
             "Main Themes or Topics": summary_keywords,
             "Reasoning Frameworks Used": reasoning_used if reasoning_used else "Unknown",
@@ -122,7 +144,10 @@ def extract_keywords(text, limit=KEYWORD_LIMIT):
     rake = Rake()
     rake.extract_keywords_from_text(text)
     ranked_phrases = rake.get_ranked_phrases()
-    return ranked_phrases[:limit]
+    # Filter out multi-word phrases
+    single_words = [word for phrase in ranked_phrases for word in phrase.split() if ' ' not in phrase]
+    return single_words[:limit]
+
 
 def generate_embedding(text):
     embedder = Embed4All()
@@ -134,7 +159,6 @@ if os.path.exists("conversation_summaries.json"):
         conversation_summaries = json.load(file)
 
 # Memory Management
-
 class Memory:
     def __init__(self):
         self.embeddings = []
@@ -162,8 +186,6 @@ try:
 except:
     pass
 
-
-
 # Chat Agent
 class ChatAgent:
     def __init__(self):
@@ -182,50 +204,37 @@ class ChatAgent:
     
     def generate_summary(self, initial_question, agent_responses, sentiment_analysis, main_themes, reasoning_frameworks):
         summary = {}
-        
-        # 1. User's Initial Question:
         summary['Initial Question'] = initial_question
-        # 1.5. Agent Responses:
         summary['Agent Responses'] = agent_responses
-        # 2. Sentiment Analysis:
         summary['Sentiment Analysis'] = sentiment_analysis
-        # 3. Main Themes or Topics:
         summary['Main Themes or Topics'] = main_themes
-        # 4. Reasoning Frameworks Used:
         summary['Reasoning Frameworks Used'] = reasoning_frameworks
-        # 5. Overall Sentiment:
         summary['Overall Sentiment'] = sentiment_analysis
-        # 6. Complete Agent Responses:
         complete_agent_responses = "\n\n".join([f"Agent {item['name']}:\n{item['response']}" for item in self.response_history if 'response' in item])
         summary['Complete Agent Responses'] = complete_agent_responses
-        # 7. Detailed Sentiment Analysis for Each Agent:
         detailed_sentiments = [{"Agent": item['name'], "Sentiment": analyze_sentiment(item['response'])} for item in self.response_history if 'response' in item]
         summary['Detailed Sentiment Analysis'] = detailed_sentiments
-        
         # Prompt structure with emphasis on conversation history
-        formattedsumprompt = (f"Previously in conversation:\n{''.join(global_conversation_history)}\n\n"
+        formattedsumprompt = (f"Previous conversation:\n{''.join(global_conversation_history)}\n\n"
                             f"Summarise the following:\n\n"
-                            f"Agent Responses:\n{agent_responses}\n\n"
-                            f"Sentiment Analysis:\n{sentiment_analysis}\n\n"
-                            f"Main Themes or Topics:\n{main_themes}\n\n"
+                            #f"Agent Responses:\n{agent_responses}\n\n"
+                            #f"Sentiment Analysis:\n{sentiment_analysis}\n\n"
+                            #f"Main Themes or Topics:\n{main_themes}\n\n"
                             f"Reasoning Frameworks Used:\n{reasoning_frameworks}\n\n"
-                            f"Overall Sentiment:\n{sentiment_analysis}\n\n"
-                            #f"Complete Agent Responses:\n{complete_agent_responses}\n\n"
+                            #f"Overall Sentiment:\n{sentiment_analysis}\n\n"
+                            f"Complete Agent Responses:\n{complete_agent_responses}\n\n"
                             f"Detailed Sentiment Analysis for Each Agent:\n{detailed_sentiments}\n\n"
                             f"Initial Question: {initial_question}\n\n"
-                            "Do not reply with a question or write a list.\n\n\n"
                             "Summary: \n")
-        #print(formattedsumprompt)
+        #print(formattedsumprompt) # Debugging
         # Generate the summary using GPT-4All
         with self.model.chat_session():
             generated_summary = self.model.generate(prompt=formattedsumprompt, temp=1, top_p=TOP_P, top_k=TOP_K)
         
         # Combine the generated summary with the existing summary components
         summarized_response = f"{generated_summary}\n\n"
-
         return summarized_response
 
-    
     def process_input(self, user_input, sequence, available_resources):
         responses = []
         output = user_input
@@ -273,37 +282,6 @@ class ChatAgent:
                 response = self.model.generate(prompt=aligned_prompt, temp=TEMP, top_p=TOP_P, top_k=TOP_K, max_tokens=token_limit)
                 responses.append(response)
         return ' '.join(responses)
-
-# Define the prompts and their associated complexities
-prompts = [
-    ("Second-Order Thinking", "Given {available_resources}, first identify the immediate outcomes of {user_query}. Then, dive deeper to discern the secondary, less obvious consequences.", "medium"),
-    ("Pareto Principle (80/20 Rule)", "Employing {available_resources}, concentrate on the crucial '20%' of factors that will yield '80%' of the outcomes for {user_query}.", "short"),
-    ("First Principle Thinking", "Utilizing {available_resources}, break down {user_query} to its foundational principles. Discern between what's factual and what's assumed.", "medium"),
-    ("Regret Minimization Framework", "With {available_resources} in mind, project long-term implications of {user_query}, especially focusing on potential regrets and emotional repercussions.", "medium"),
-    ("Opportunity Costs", "Given {available_resources}, contemplate the alternatives you'll forego by opting for {user_query}.", "medium"),
-    ("The Sunk Cost Fallacy", "Utilizing {available_resources}, analyze {user_query} by emphasizing its prospective benefits over the costs already incurred.", "medium"),
-    ("Occam's Razor", "With {available_resources}, distill {user_query} to its simplest form or explanation, eliminating unnecessary complexities.", "short"),
-    ("Systems Thinking", "Using {available_resources}, map out where {user_query} slots into broader systems or networks.", "short"),
-    ("Inversion", "Keeping {available_resources} in mind, reverse-engineer {user_query}, highlighting potential challenges and pitfalls.", "medium"),
-    ("Leverage", "Employing {available_resources}, explore how you can use leverage to maximize the outcomes of {user_query}.", "short"),
-    ("Circle of Competence", "Given {available_resources}, verify that {user_query} aligns well with your domain of expertise and knowledge.", "medium"),
-    ("Law of Diminishing Returns", "With {available_resources}, pinpoint areas in {user_query} where additional efforts might produce diminishing outcomes.", "medium"),
-    ("Niches", "Using {available_resources}, categorize how {user_query} can be tailored or adapted to cater to specific niches or subgroups.", "short"),
-    ("Margin of Safety", "With {available_resources}, strategize to incorporate a buffer or safety net around the outcomes of {user_query}.", "medium"),
-    ("Hanlon's Razor", "Given {available_resources}, approach {user_query} with neutrality, avoiding assumptions of malevolence or negative intent.", "short"),
-    ("Randomness", "Considering {available_resources}, factor in elements of unpredictability and chance that could influence {user_query}.", "medium"),
-    ("Critical Mass", "Utilizing {available_resources}, determine the tipping point at which {user_query} becomes self-sustaining or gains momentum.", "short"),
-    ("The Halo Effect", "Employing {available_resources}, scrutinize how initial perceptions or biases might color subsequent interpretations of {user_query}.", "medium"),
-    ("Feedback Loops", "With {available_resources}, trace the cyclic patterns or recurring themes that emerge in relation to {user_query}.", "medium"),
-    ("Scarcity and Abundance Mindset", "Given {available_resources}, introspect on the mindset—either scarcity-driven or abundance-oriented—that dominates when addressing {user_query}.", "long")
-]
-
-# Token limits based on complexity
-token_limits = {
-    "short": 128,
-    "medium": 256,
-    "long": 512
-}
 
 def print_availableframes():
     print("\nHere are the available reasoning frameworks and their associated letters:\n")
