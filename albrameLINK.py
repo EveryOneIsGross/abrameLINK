@@ -7,22 +7,24 @@ import json
 import os
 
 # Global Configuration
-MODEL_NAME = 'C://AI_MODELS//openorca-platypus2-13b.ggmlv3.q4_1.bin'
-GUIDANCE_PROMPT = ("As a reasoning framework answer: {user_query}. "
-                   "List only a. problem b. solution c. action, consider current context, "
-                   "use solutions and methods according to suggested logic.")
-TEMP = 0.6
-TOP_P = 0.8 # TOP_P is the cumulative probability of the most likely tokens to sample from it ranges from 0 to 1.0
-TOP_K = 40 # TOP_K is the number of the most likely tokens to sample from. It ranges from 0 to 50257 for GPT-2.
-CHUNK_LIMIT = 256
-KEYWORD_LIMIT = 5
+MODEL_NAME = 'C://AI_MODELS//orca-mini-3b.ggmlv3.q4_0.bin'
+GUIDANCE_PROMPT = ("As a reasoning expert answer: {user_query}. "
+                   "Assume you have all available information you need."
+                   "Use solutions and methods according to suggested reasoning model."
+                   "List only a. problem b. solution c. action.")
+TEMP = 0.5 # TEMP is the temperature of the sampling. It ranges from 0 to 1.0
+TOP_P = 0.5 # TOP_P is the cumulative probability of the most likely tokens to sample from it ranges from 0 to 1.0
+TOP_K = 128 # TOP_K is the number of the most likely  tokens to sample from it ranges from 0 to infinity
+CHUNK_LIMIT = 64
+KEYWORD_LIMIT = 4
 
-# Global Variables
-conversation_history = []
-max_tokens_for_context = 100
-tokens = " ".join(conversation_history).split()
+# Rename the global variable
+global_conversation_history = []
+max_tokens_for_context = 1024
+tokens = " ".join(global_conversation_history).split()
 output = ""
 reasoning_used = []
+conversation_summaries = []
 
 def format_response(agent_data):
     template = f"""
@@ -45,13 +47,7 @@ else:
 # Utility Functions
 
 def save_to_json(data, filename, mode="append"):
-    """
-    Save data to a JSON file.
 
-    :param data: Data to save
-    :param filename: Name of the file
-    :param mode: Mode of saving - "append" or "overwrite"
-    """
     existing_data = []
     
     if os.path.exists(filename) and mode == "append":
@@ -133,6 +129,11 @@ def generate_embedding(text):
     embedder = Embed4All()
     return embedder.embed(text)
 
+# Load previous summaries if they exist
+if os.path.exists("conversation_summaries.json"):
+    with open("conversation_summaries.json", "r") as file:
+        conversation_summaries = json.load(file)
+
 # Memory Management
 
 class Memory:
@@ -163,6 +164,7 @@ except:
     pass
 
 
+
 # Chat Agent
 class ChatAgent:
     def __init__(self):
@@ -170,6 +172,7 @@ class ChatAgent:
         self.response_history = []
         self.model = GPT4All(model_name=MODEL_NAME)
         self.embedder = Embed4All()
+        self.conversation_history = []
 
     def generate_embedding(self, text):
         return self.embedder.embed(text)
@@ -180,7 +183,7 @@ class ChatAgent:
     
     def generate_summary(self, initial_question, agent_responses, sentiment_analysis, main_themes, reasoning_frameworks):
         summary = {}
-
+        
         # 1. User's Initial Question:
         summary['Initial Question'] = initial_question
         # 1.5. Agent Responses:
@@ -199,25 +202,26 @@ class ChatAgent:
         # 7. Detailed Sentiment Analysis for Each Agent:
         detailed_sentiments = [{"Agent": item['name'], "Sentiment": analyze_sentiment(item['response'])} for item in self.response_history if 'response' in item]
         summary['Detailed Sentiment Analysis'] = detailed_sentiments
-        summarized_response = ""
-        for key, value in summary.items():
-            summarized_response += f"{key}: {value}\n\n"
-        # Use GPT-4All to generate a summary of all the information
-        formattedsumprompt = f"Generate a summary:\n\n" \
-                    f"Initial Question: {initial_question}\n\n" \
-                    f"Agent Responses:\n{agent_responses}\n\n" \
-                    f"Sentiment Analysis:\n{sentiment_analysis}\n\n" \
-                    f"Main Themes or Topics:\n{main_themes}\n\n" \
-                    f"Reasoning Frameworks Used:\n{reasoning_frameworks}\n\n" \
-                    f"Overall Sentiment:\n{sentiment_analysis}\n\n" \
-                    f"Complete Agent Responses:\n{complete_agent_responses}\n\n" \
-                    f"Detailed Sentiment Analysis for Each Agent:\n{detailed_sentiments}\n\n"
+        
+        # Prompt structure with emphasis on conversation history
+        formattedsumprompt = (f"Given the previous conversation history:\n{''.join(global_conversation_history)}\n\n"
+                            f"Generate a comprehensive summary considering the following details:\n\n"
+                            f"Initial Question: {initial_question}\n\n"
+                            f"Agent Responses:\n{agent_responses}\n\n"
+                            f"Sentiment Analysis:\n{sentiment_analysis}\n\n"
+                            f"Main Themes or Topics:\n{main_themes}\n\n"
+                            f"Reasoning Frameworks Used:\n{reasoning_frameworks}\n\n"
+                            f"Overall Sentiment:\n{sentiment_analysis}\n\n"
+                            f"Complete Agent Responses:\n{complete_agent_responses}\n\n"
+                            f"Detailed Sentiment Analysis for Each Agent:\n{detailed_sentiments}\n\n")
 
+        # Generate the summary using GPT-4All
         with self.model.chat_session():
-            # Generate the summary using GPT-4All
-            generated_summary = self.model.generate(prompt=formattedsumprompt, temp=0.2, top_p=TOP_P, top_k=TOP_K, max_tokens=1000)
+            generated_summary = self.model.generate(prompt=formattedsumprompt, temp=1, top_p=TOP_P, top_k=TOP_K)
+        
         # Combine the generated summary with the existing summary components
         summarized_response = f"{generated_summary}\n\n"
+
         return summarized_response
 
     
@@ -244,7 +248,8 @@ class ChatAgent:
             if index < len(prompts):
                 prompt_text, prompt_query, complexity = prompts[index]
                 token_limit = token_limits[complexity]
-                query = prompt_query.format(user_query=output, available_resources=available_resources)
+                query = f"User has asked: '{user_input}'. Based on this, " + prompt_query.format(user_query=output, available_resources=available_resources) + f". Always consider the user's main question: '{user_input}' in your response."
+
                 aligned_prompt = f"Framework: {prompt_text}. {query} {GUIDANCE_PROMPT}"
                 response = self.generate_response(query, token_limit)
                 # Update the reasoning_used list with the current reasoning framework
@@ -277,7 +282,7 @@ prompts = [
     ("Opportunity Costs", "Given {available_resources}, contemplate the alternatives you'll forego by opting for {user_query}.", "medium"),
     ("The Sunk Cost Fallacy", "Utilizing {available_resources}, analyze {user_query} by emphasizing its prospective benefits over the costs already incurred.", "medium"),
     ("Occam's Razor", "With {available_resources}, distill {user_query} to its simplest form or explanation, eliminating unnecessary complexities.", "short"),
-    ("Systems Thinking", "Using {available_resources}, map out where {user_query} slots into broader systems or networks.", "medium"),
+    ("Systems Thinking", "Using {available_resources}, map out where {user_query} slots into broader systems or networks.", "short"),
     ("Inversion", "Keeping {available_resources} in mind, reverse-engineer {user_query}, highlighting potential challenges and pitfalls.", "medium"),
     ("Leverage", "Employing {available_resources}, explore how you can use leverage to maximize the outcomes of {user_query}.", "short"),
     ("Circle of Competence", "Given {available_resources}, verify that {user_query} aligns well with your domain of expertise and knowledge.", "medium"),
@@ -294,9 +299,9 @@ prompts = [
 
 # Token limits based on complexity
 token_limits = {
-    "short": 200,
-    "medium": 400,
-    "long": 600
+    "short": 128,
+    "medium": 256,
+    "long": 512
 }
 
 def print_availableframes():
