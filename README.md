@@ -1,5 +1,7 @@
 # abrameLINK
 
+![abramelink](https://github.com/EveryOneIsGross/abrameLINK/assets/23621140/f195dc39-701f-4bde-bc0e-174a94bbfbd6)
+
 A sequence of reasoning agents that will engage in a round table conversation based on teh user query and their stated available resources
 
 ---
