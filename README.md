@@ -11,9 +11,13 @@ The name abrameLINK is derived from the Book of Abramelin, fabled to be able to 
 ## How to Use
 
   **Setup:** Ensure all dependencies from requirements.txt are installed.
+  
   **Run the Script:** Execute the script. You will be prompted to:
+  
   **Enter your query:** Describe the scenario or problem you are facing.
+  
   **Specify your available resources:** Mention any tools, skills, or resources at your disposal.
+  
   **Select reasoning paradigms:** Use the letters associated with each paradigm to define a sequence (e.g., 'aabc').
 
 ---
