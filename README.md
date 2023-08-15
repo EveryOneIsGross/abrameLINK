@@ -4,6 +4,18 @@
 
 A sequence of reasoning agents that will engage in a round table conversation based on teh user query and their stated available resources
 
+```
+--------------------------------
+Summary of the Conversation:
+--------------------------------
+To avoid falling under another person's will, you may want to consider the following course of action:
+1. Cultivate your own individuality and develop your true will;
+2. Establish boundaries around personal privacy concerns;
+3. Practice assertiveness in dealing with others.
+
+Remember that developing your "true will" is essential for achieving independence and autonomy.
+```
+
 ---
 
 abrameLINK is a roundtable chat agent. By simulating a roundtable discussion among multiple agents, each representing a unique reasoning framework, it ensures comprehensive analysis of the user's query. As each agent in the sequence processes the query, the following agent builds upon the previous agent's response, allowing for a multi-dimensional examination of the query. The user can enter a list of their available resources to help agents suggest actionable responses.
