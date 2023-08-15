@@ -5,13 +5,17 @@ import pickle
 import numpy as np
 import json
 import os
+from nltk.tokenize import sent_tokenize
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Global Configuration
 MODEL_NAME = 'C://AI_MODELS//openorca-platypus2-13b.ggmlv3.q4_1.bin'
-GUIDANCE_PROMPT = ("Respond with a reasoned idea, solution, and action. Assume all necessary information has been provided.")
-TEMP = 0.5 # TEMP is the temperature of the sampling. It ranges from 0 to 1.0
-TOP_P = 0.5 # TOP_P is the cumulative probability of the most likely tokens to sample from it ranges from 0 to 1.0
-TOP_K = 64 # TOP_K is the number of the most likely  tokens to sample from it ranges from 0 to infinity
+#GUIDANCE_PROMPT = "Provide a unique and insightful answer based on the context. Avoid repeating previous responses."
+# Verbose: "Your objective is to provide a distinct and insightful answer, grounded in the context provided. Ensure that you are not reiterating previous responses or commonly known facts."
+GUIDANCE_PROMPT = "Give a fresh and relevant answer based on the context."
+TEMP = 0.7 # TEMP is the temperature of the sampling. It ranges from 0 to 1.0
+TOP_P = 0.7 # TOP_P is the cumulative probability of the most likely tokens to sample from it ranges from 0 to 1.0
+TOP_K = 80 # TOP_K is the number of the most likely  tokens to sample from it ranges from 0 to infinity
 CHUNK_LIMIT = 512
 KEYWORD_LIMIT = 6
 
@@ -22,6 +26,8 @@ tokens = " ".join(global_conversation_history).split()
 output = ""
 reasoning_used = []
 conversation_summaries = []
+conversation_history = []
+
 
 # Define the frameworks and their associated logic
 prompts = [
@@ -58,16 +64,19 @@ token_limits = {
 
 def format_response(agent_data):
     template = f"""
-    Agent Name: {agent_data['name']}
-    Reasoning Framework: {agent_data['prompt']}
-    --------------------------------------------
-    Response: 
-    {agent_data['response']}
-    
-    Sentiment: {agent_data['sentiment']}
-    Keywords: {', '.join(agent_data['keywords'])}
-    --------------------------------------------
-    """
+### System:
+You are an AI Agent that employs various reasoning frameworks to provide insightful responses.
+
+### Human:
+{recorded_data["user_input"]}
+
+### Agent {agent_data['name']} ({agent_data['prompt']}):
+{agent_data['response']}
+
+Sentiment: {agent_data['sentiment']}
+Keywords: {', '.join(agent_data['keywords'])}
+--------------------------------------------
+"""
     return template
 
 if len(tokens) > max_tokens_for_context:
@@ -103,6 +112,7 @@ def save_summary_data(summary, user_query, reasoning_used=None, filename="summar
     summary_sentiment = analyze_sentiment(summary)
     summary_data = {
         "Summary Agent Response": {
+            
             "Initial Question": user_query,
             "Sentiment Analysis": {
                 "Overall Sentiment": summary_sentiment,
@@ -123,17 +133,37 @@ def load_data(filename):
     with open(filename, 'rb') as file:
         return pickle.load(file)
 
+def truncate_preserving_sentences(text, max_tokens):
+    sentences = sent_tokenize(text)
+    truncated_text = ''
+    total_tokens = 0
+    
+    for sentence in reversed(sentences):
+        sentence_tokens = len(sentence.split())
+        if total_tokens + sentence_tokens <= max_tokens:
+            truncated_text = sentence + " " + truncated_text
+            total_tokens += sentence_tokens
+        else:
+            break
+    
+    return truncated_text.strip()
+
 def chunk_text(text, max_tokens=CHUNK_LIMIT):
     words = text.split()
     chunks = []
     current_chunk = []
+    
     for word in words:
-        if len(current_chunk) + len(word) <= max_tokens:
+        if len(current_chunk) + len(word.split()) <= max_tokens:
             current_chunk.append(word)
         else:
-            chunks.append(' '.join(current_chunk))
+            chunk = ' '.join(current_chunk)
+            chunks.append(truncate_preserving_sentences(chunk, max_tokens))
             current_chunk = [word]
-    chunks.append(' '.join(current_chunk))
+    if current_chunk:
+        chunk = ' '.join(current_chunk)
+        chunks.append(truncate_preserving_sentences(chunk, max_tokens))
+    
     return chunks
 
 def analyze_sentiment(text):
@@ -144,9 +174,12 @@ def extract_keywords(text, limit=KEYWORD_LIMIT):
     rake = Rake()
     rake.extract_keywords_from_text(text)
     ranked_phrases = rake.get_ranked_phrases()
-    # Filter out multi-word phrases
-    single_words = [word for phrase in ranked_phrases for word in phrase.split() if ' ' not in phrase]
+    
+    # Filter out multi-word phrases and avoid duplicates
+    single_words = list(set(word for phrase in ranked_phrases for word in phrase.split() if ' ' not in phrase))
+    
     return single_words[:limit]
+
 
 
 def generate_embedding(text):
@@ -157,6 +190,8 @@ def generate_embedding(text):
 if os.path.exists("conversation_summaries.json"):
     with open("conversation_summaries.json", "r") as file:
         conversation_summaries = json.load(file)
+
+
 
 # Memory Management
 class Memory:
@@ -177,14 +212,36 @@ class Memory:
                 return self.texts[i]
         return None
 
+# Initialize the memory object to store the embeddings and texts
 memory = Memory()
-conversation_history = []
-try:
-    memory_data = load_data('memory.pkl')
-    memory.embeddings = memory_data['embeddings']
-    memory.texts = memory_data['texts']
-except:
-    pass
+
+
+def search_similar_words(keyword, num_results=1):
+    global memory  # This line indicates that we are using the global memory object
+
+    # Generate embedding for the provided keyword
+    keyword_embedding = generate_embedding(keyword)
+
+    # Search the memory for similar words or phrases
+    similarities = []  # To store tuples of (similarity, word)
+
+    for i, stored_embedding in enumerate(memory.embeddings):
+        # Using sklearn's cosine_similarity for accuracy
+        similarity = cosine_similarity([stored_embedding], [keyword_embedding])[0][0]
+        similarities.append((similarity, memory.texts[i]))
+
+    # Sort the similarities in descending order and take the top num_results
+    sorted_similarities = sorted(similarities, key=lambda x: x[0], reverse=True)[:num_results]
+
+    # Format and present the results to the user
+    if sorted_similarities:
+        print(f"Top {num_results} words or phrases similar to '{keyword}':")
+        for sim, word in sorted_similarities:
+            print(f"- {word} (Similarity: {sim:.4f})")
+    else:
+        print(f"No words or phrases found similar to '{keyword}'.")
+
+
 
 # Chat Agent
 class ChatAgent:
@@ -214,22 +271,17 @@ class ChatAgent:
         summary['Complete Agent Responses'] = complete_agent_responses
         detailed_sentiments = [{"Agent": item['name'], "Sentiment": analyze_sentiment(item['response'])} for item in self.response_history if 'response' in item]
         summary['Detailed Sentiment Analysis'] = detailed_sentiments
-        # Prompt structure with emphasis on conversation history
-        formattedsumprompt = (f"Previous conversation:\n{''.join(global_conversation_history)}\n\n"
-                            f"Summarise the following:\n\n"
-                            #f"Agent Responses:\n{agent_responses}\n\n"
-                            #f"Sentiment Analysis:\n{sentiment_analysis}\n\n"
-                            #f"Main Themes or Topics:\n{main_themes}\n\n"
-                            f"Reasoning Frameworks Used:\n{reasoning_frameworks}\n\n"
-                            #f"Overall Sentiment:\n{sentiment_analysis}\n\n"
-                            f"Complete Agent Responses:\n{complete_agent_responses}\n\n"
-                            f"Detailed Sentiment Analysis for Each Agent:\n{detailed_sentiments}\n\n"
-                            f"Initial Question: {initial_question}\n\n"
-                            "Summary: \n")
+        formattedsumprompt = (f"Question: {initial_question}\n"
+                            f"Agent Responses: {complete_agent_responses}\n"
+                            f"Topics: {', '.join(main_themes)}\n"
+                            f"Reasoning Frameworks Used: {', '.join(reasoning_frameworks)}\n"
+                            f"Detailed Sentiment Analysis: {detailed_sentiments}\n"
+                            f"System: Based on the provided details, generate a concise and coherent summary.")
+
         #print(formattedsumprompt) # Debugging
         # Generate the summary using GPT-4All
         with self.model.chat_session():
-            generated_summary = self.model.generate(prompt=formattedsumprompt, temp=1, top_p=TOP_P, top_k=TOP_K)
+            generated_summary = self.model.generate(prompt=formattedsumprompt, temp=0.6, top_p=TOP_P, top_k=TOP_K, max_tokens=token_limits["long"])
         
         # Combine the generated summary with the existing summary components
         summarized_response = f"{generated_summary}\n\n"
@@ -258,14 +310,19 @@ class ChatAgent:
             if index < len(prompts):
                 prompt_text, prompt_query, complexity = prompts[index]
                 token_limit = token_limits[complexity]
-                query = f"User has asked: '{user_input}'. Based on this, " + prompt_query.format(user_query=output, available_resources=available_resources) + f". Always consider the user's main question: '{user_input}' in your response."
+                # Verbose: "Given the user's query: '{user_input}', you are expected to provide a solution or insight. Your response should be deeply rooted in the context of the question and should not stray from the main topic. Therefore, "
+                # OldVer: "User has asked: '{user_input}'. Based on this, "
+                # OldVer: "It is imperative to always keep the user's primary question: '{user_input}' at the forefront of your considerations while formulating your response."
+                # Existing: "Always consider the user's main question: '{user_input}' in your response."
+                query = f"User has asked: '{user_input}'. So, " + prompt_query.format(user_query=output, available_resources=available_resources) + f". Remember the main question: '{user_input}' in your answer."
 
-                aligned_prompt = f"Framework: {prompt_text}. {query} {GUIDANCE_PROMPT}"
+                aligned_prompt = f"{prompt_text}. Framework: {query} {GUIDANCE_PROMPT}"
                 response = self.generate_response(query, token_limit)
                 # Update the reasoning_used list with the current reasoning framework
                 reasoning_used.append(prompt_text)
                 responses.append(response)
                 conversation_history.append(response)
+
                 output += f" Agent {agent.upper()}'s suggestion: {response}"
         memory.add_memory(user_input, generate_embedding(user_input))
         for response in responses:
@@ -299,11 +356,26 @@ def save_summary_to_json(conversation_summaries, filename="conversation_summarie
         json.dump(conversation_summaries, json_file, indent=4)
 
 def main():
-    global recorded_data
+    global recorded_data, memory
     agent = ChatAgent()
     
+    memory = Memory()
+
+    try:
+        memory_data = load_data('memory.pkl')
+        memory.embeddings = memory_data['embeddings']
+        memory.texts = memory_data['texts']
+    except:
+        pass
+
     while True:  # Start the conversation loop
-        user_input = input("\nEnter your query (or type 'exit' to end): ")
+        user_input = input("\nEnter your query, type 'search' to find similar words, or 'exit' to end: ")
+        # Handle 'search' command
+        if user_input.strip().lower() == 'search':
+            keyword = input("Enter a keyword to search for similar words or phrases: ")
+            search_similar_words(keyword)
+            continue  # Skip the rest of the loop and prompt the user again
+        
         if user_input.strip().lower() == 'exit':
             break  # End the loop if the user types 'exit'
         
